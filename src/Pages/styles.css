@@ -1,0 +1,50 @@
+
+.wrapper{
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+}
+.wrapper input{
+    /* width: 150px; */
+    /* height: 50px; */
+    justify-self: center;
+    align-self: center;
+}
+
+.wrapper a button{
+    justify-self: center;
+    align-self: center;
+}
+
+.wrapper a{
+    justify-self: center;
+    align-self: center;
+}
+
+.no-player{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    height: 100%;
+}
+.no-player h3{
+    font-size: 2rem;
+    color: #8a0303;
+    margin-bottom: 1rem;
+}
+
+.link-box{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    height: 100%;
+}
+.link-box span{
+    font-size: 2rem;
+    color: #8a0303;
+    margin-bottom: 1rem;
+}
