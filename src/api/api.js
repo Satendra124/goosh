@@ -1,6 +1,6 @@
 import axios from "axios";
 
-axios.defaults.baseURL = "http://localhost:8080/api";
+axios.defaults.baseURL = "https://backend-theta-virid.vercel.app/api";
 
 
 export const enterRoom = async (room, attributes) => {
