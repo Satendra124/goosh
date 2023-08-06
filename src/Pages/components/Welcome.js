@@ -21,6 +21,11 @@ export const Welcome = () => {
     const onUser = (user) => {
         setUserSet(true);
     }
+    const logout = () => {
+        localStorage.removeItem('user');
+        setUserSet(false);
+    }
+    
     return (
         <div className="wrapper-welcome">
             <PaperCard className="paper-card">
@@ -43,6 +48,7 @@ export const Welcome = () => {
                             <Link to={`/${roomId}`}>
                                 <button>Join</button>
                             </Link>
+                            <button onClick={logout}>Logout</button>
                         </div>
 
                 }
