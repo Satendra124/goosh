@@ -1,7 +1,7 @@
-const express = require('express');
+const express = require("express");
 const app = express();
 const port = 8080; // You can use any port number you prefer
-const cors = require('cors');
+const cors = require("cors");
 
 // Middleware to parse JSON requests
 app.use(express.json());
@@ -12,221 +12,186 @@ app.listen(port, () => {
     console.log(`Server started on http://localhost:${port}`);
 });
 
-const { MongoClient } = require('mongodb');
+const mongoose = require('mongoose');
+const Room = require('./room');
+const { get_new_state_update_prompt, make_promt, make_intial_prompt } = require("./ai");
 
-const mongoURI = 'mongodb+srv://satendraraj:ohhello@cluster0.sj549jp.mongodb.net/goose?retryWrites=true&w=majority';
-const client = new MongoClient(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
+// Connect to MongoDB
+mongoose.connect('mongodb+srv://satendraraj:ohhello@cluster0.sj549jp.mongodb.net/goose?retryWrites=true&w=majority', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+}).then(() => {
+    console.log('Connected to MongoDB');
+}).catch((err) => {
+    console.error('Error connecting to MongoDB:', err);
+});
 
-async function connectToDB() {
+const INITIAL_ATTRIBUTE_VALUE = 10;
+const MAX_ATTRIBUTE_VALUE = 15;
+const MIN_ATTRIBUTE_VALUE = 0;
+
+app.post("/api/room", async (req, res) => {
     try {
-        await client.connect();
-        console.log('Connected to MongoDB');
-    } catch (error) {
-        console.error('Error connecting to MongoDB:', error);
-    }
-}
-
-connectToDB();
-
-// Assuming you have a MongoDB collection named "users"
-const roomCollection = client.db('goose').collection('room');
-
-
-const goose = ['Maxwell', 'Gander'];
-
-const mockGameState = {
-    you: 0,
-    state: "0_RIDDLEAWAIT_1_RIDDLEAWAIT",
-    results: [
-        {
-            round: 1, riddles: [
-                { by: 0, to: 1, riddle: "riddle1", answer: "answer", guess: ["guess1", "guerss1"], winner: null },
-                { by: 0, to: 1, riddle: "riddle1", answer: "answer", guess: ["guess1", "guerss1"], winner: null },
-            ]
+        const room_id = req.body.room_id;
+        const player_id = req.body.player_id;
+        const attributes = req.body.attributes;
+        if (!room_id || !player_id || !attributes) {
+            res.status(400).json({ message: "Invalid request" });
+            return;
         }
-    ]
-}
 
-const round_states = [
-    'NO_PLAYER',
-    'NO_RIDDLE', // start adding your riddle
-    '0_RIDDLE',
-    '1_RIDDLE',
-    '0_RIDDLE_1_RIDDLE', // start gussing
-    '0_WON',
-    '1_WON',
-    'GAME_OVER'
-]
-
-const axios = require('axios');
-
-const apiKey = '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';
-const apiUrl = 'https://api.openai.com/v1/chat/completions';
-
-const convertRiddle = async (riddle) => {
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-    };
-
-    const data = {
-        model: 'gpt-3.5-turbo',
-        messages: [
-            { role: 'system', content: 'You will give an riddle in 50 words which will be over complicated explanation of an object or word.' },
-            { role: 'user', content: riddle }
-        ]
-    };
-
-    const res = await axios.post(apiUrl, data, { headers });
-    console.log(res);
-    return res.data.choices[0].message.content;
-}
-
-const addRiddle = async (roomData, to, from, riddle) => {
-    const convertedRiddle = await convertRiddle(riddle);
-    roomData.results[roomData.results.length - 1].riddles.push({
-        from, to, riddle: convertedRiddle, answer: riddle, guess: [], winner: null
-    });
-    const len = roomData.results[roomData.results.length - 1].riddles.length;
-    if (len == 1) {
-        roomData.state = from + '_RIDDLE';
-    } else if (len == 2) {
-        roomData.state = '0_RIDDLE_1_RIDDLE';
-    }
-    await roomCollection.updateOne({ _id: roomData._id }, { $set: { ...roomData } });
-    return roomData;
-}
-
-const addGuess = async (roomData, role, guess) => {
-    if (roomData.state !== '0_RIDDLE_1_RIDDLE') {
-        return { error: "All Riddles addition awaits" };
-    } else {
-        const lastRound = roomData.results[roomData.results.length - 1];
-        const riddles = lastRound.riddles;
-        for (let riddle of riddles) {
-            if (riddle.to == role) {
-                riddle.guess.push(guess);
-                if (riddle.answer === guess) {
-                    riddle.winner = role;
-                    roomData.state = role + '_WON';
+        const room = await Room.findById(room_id);
+        if (room) {
+            if (room.players.length === 1) {
+                if (room.players[0] === player_id) {
+                    res.status(200).json(room);
+                    return;
                 }
-            }
-        }
-    }
-    await roomCollection.updateOne({ _id: roomData._id }, { $set: { ...roomData } });
-    return roomData;
-}
-
-const moveToNextRound = async (roomData) => {
-    if (roomData.results.length == 5) {
-        roomData.state = 'GAME_OVER';
-        await roomCollection.updateOne({ _id: roomData._id }, { $set: { ...roomData } });
-        return roomData;
-    }
-    roomData.state = 'NO_RIDDLE';
-    roomData.results.push({
-        round: roomData.results.length + 1,
-        riddles: []
-    });
-    await roomCollection.updateOne({ _id: roomData._id }, { $set: { ...roomData } });
-    return roomData;
-}
-
-// Route to fetch all users
-app.get('/api/room', async (req, res) => {
-    try {
-        const rooms = await roomCollection.find().toArray();
-        res.json(rooms);
-    } catch (error) {
-        console.error('Error fetching users:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Route to create a new user
-app.post('/api/room', async (req, res) => {
-    try {
-        const { id } = req.body;
-        const { username } = req.body;
-        const exist = await roomCollection.findOne({ _id: id });
-        if (exist) {
-            // Gander
-            //check if player already in room
-            if (exist.players.includes(username)) {
-                res.json({ ...exist, you: 0});
-                return;
-            }
-            exist.state = round_states[1];
-            exist.players.push(username);
-            await roomCollection.updateOne({ _id: id }, { $set: { ...exist } });
-            res.json({ ...exist, you: 1 });
-        } else {
-            // Maxwell
-            const roomData = {
-                _id: id,
-                state: round_states[0],
-                results: [
-                    {
-                        round: 1, riddles: []
+                const attribute_map = attributes.map(attr => ({ name: attr, value: INITIAL_ATTRIBUTE_VALUE }));
+                room.players.push(player_id);
+                room.attr.push({
+                    player: player_id,
+                    attributes: attribute_map,
+                });
+                const opponent_attributes = room.attr.find(p => p.player === room.players[0]).attributes;
+                let all_attributes = [...attribute_map, ...opponent_attributes];
+                // remove duplicates
+                const map = {};
+                all_attributes.forEach((attribute) => {
+                    if (!map[attribute.name]) {
+                        map[attribute.name] = attribute;
+                    } else {
+                        map[attribute.name].value += attribute.value;
                     }
-                ],
-                players:[username]
+                });
+                all_attributes = Object.values(map);
+                console.log(all_attributes);
+                all_attributes.forEach((attribute) => {
+                    delete attribute._id;
+                });
+                room.attr.forEach((player) => {
+                    player.attributes = all_attributes;
+                });
+                // add this player as replier
+                room.current_round.replier = player_id;
+                const all_attributes_names = all_attributes.map(attr => attr.name);
+                room.prompts.push(make_intial_prompt(room.players,all_attributes_names));
+                console.log(room);
+                await room.save();
+                res.status(200).json(room);
+            } else {
+                res.status(400).json({ message: "Room is full" });
             }
-            const result = await roomCollection.insertOne({ ...roomData });
-            res.json({ roomData, you: 0 });
+        } else {
+            const newPlayer = {
+                player: player_id,
+                attributes: attributes.map(attr => ({ name: attr, value: INITIAL_ATTRIBUTE_VALUE })),
+            };
+            const room = new Room({
+                _id: room_id,
+                attr: [newPlayer],
+                players: [player_id],
+                prompts: [],
+                current_round: {
+                    challenger: player_id,
+                    replier: null,
+                    challenger_message: null,
+                }
+            });
+            await room.save();
+            res.status(200).json(room);
         }
     } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.log(error);
+        res.status(500).json({ message: "Internal server error" });
     }
 });
 
+// Send message
+app.post("/api/room/:room_id/message", async (req, res) => {
+    try {
+        const room_id = req.params.room_id;
+        const player_id = req.body.player_id;
+        const message = req.body.message;
+        if (!room_id || !player_id || !message) {
+            res.status(400).json({ message: "Invalid request" });
+            return;
+        }
 
-// add riddle
-app.post('/api/riddle', async (req, res) => {
-    const { role } = req.body;
-    const { room } = req.body;
-    const { riddle } = req.body;
-    const roomData = await roomCollection.findOne({ _id: room });
-    if (!roomData) {
-        res.json({ "error": "Room Not Found" });
-        return;
+        const room = await Room.findById(room_id);
+        if (!room) {
+            res.status(400).json({ message: "Room not found" });
+            return;
+        }
+
+        const isReplier = room.current_round.replier === player_id;
+        const isChallenger = room.current_round.challenger === player_id;
+        if (!isReplier && !isChallenger) {
+            res.status(400).json({ message: "Player not found" });
+            return;
+        }
+        if(isReplier && room.current_round.challenger_message) {
+            // Here main game logic will be done
+            const challenger_message = room.current_round.challenger_message;
+            const replier_message = message;
+            const challenger = room.current_round.challenger;
+            const replier = room.current_round.replier;
+            const prompt = make_promt(challenger,replier,challenger_message,replier_message);
+            room.prompts.push(prompt);
+            const rooms_obj = room.toObject();
+            const state = await get_new_state_update_prompt(rooms_obj.prompts,room.prompts);
+            if(!state.valid){
+                // next round
+                room.current_round.challenger = replier;
+                room.current_round.replier = challenger;
+                room.current_round.challenger_message = null;
+                await room.save();
+                res.status(200).json(room);
+                return; 
+            }
+            // transform data
+            room.attr.forEach((player) => {
+                player.attributes.forEach((attribute) => {
+                    attribute.value = state.data[player.player][attribute.name];
+                });
+            });
+            room.current_round.challenger_message = null;
+            room.current_round.replier = challenger;
+            room.current_round.challenger = replier;
+            console.log(room.toObject());
+            await room.save();
+            res.status(200).json(room);
+        }else if(isChallenger && !room.current_round.challenger_message) {
+            // add challenger message
+            room.current_round.challenger_message = message;
+            await room.save();
+            res.status(200).json(room);
+        }else {
+            res.status(400).json({ message: "Invalid request" });
+        }
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Internal server error" });
     }
-    res.json(await addRiddle(roomData, !role, role, riddle));
 });
 
-// add answer
-app.post('/api/guess', async (req, res) => {
-    const { role } = req.body;
-    const { room } = req.body;
-    const { guess } = req.body;
-    const roomData = await roomCollection.findOne({ _id: room });
-    if (!roomData) {
-        res.json({ "error": "Room Not Found" });
-        return;
-    }
-    res.json(await addGuess(roomData, role, guess));
-})
+// get room data
+app.get("/api/room/:room_id", async (req, res) => {
+    try {
+        const room_id = req.params.room_id;
+        if (!room_id) {
+            res.status(400).json({ message: "Invalid request" });
+            return;
+        }
 
-// refresh state
-app.post('/api/refresh', async (req, res) => {
-    const { room } = req.body;
-    const roomData = await roomCollection.findOne({ _id: room });
-    if (!roomData) {
-        res.json({ "error": "Room Not Found" });
-        return;
+        const room = await Room.findById(room_id);
+        if (!room) {
+            res.status(400).json({ message: "Room not found" });
+            return;
+        }
+        res.status(200).json(room);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Internal server error" });
     }
-    res.json(roomData);
-})
-
-// move to next round
-app.post('/api/next', async (req, res) => {
-    const { room } = req.body;
-    const roomData = await roomCollection.findOne({ _id: room });
-    if (!roomData) {
-        res.json({ "error": "Room Not Found" });
-        return;
-    }
-    res.json(await moveToNextRound(roomData));
-})
-
+});

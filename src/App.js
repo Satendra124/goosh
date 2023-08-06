@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import './App.css';
-import { useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Home } from './Pages/Home';
 import { Room } from './Pages/Room';
+import { Lost } from './Pages/components/Lost';
+import { Won } from './Pages/components/Won';
 
 
 function App() {
@@ -13,6 +13,9 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/:id" element={<Room />} />
+          <Route path="/won" element={<Won />} />
+          <Route path="/lost" element={<Lost />} />
+
         </Routes>
       </BrowserRouter>
     </div>

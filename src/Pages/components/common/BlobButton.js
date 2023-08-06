@@ -3,15 +3,15 @@ import './BlobButton.css'
 export const BlobButton = ({ text, onClick }) => {
     return (
         <div>
-            <div class="buttons">
-                <button class="blob-btn" onClick={onClick}>
+            <div className="buttons">
+                <button className="blob-btn" onClick={onClick}>
                     {text}
-                    <span class="blob-btn__inner">
-                        <span class="blob-btn__blobs">
-                            <span class="blob-btn__blob"></span>
-                            <span class="blob-btn__blob"></span>
-                            <span class="blob-btn__blob"></span>
-                            <span class="blob-btn__blob"></span>
+                    <span className="blob-btn__inner">
+                        <span className="blob-btn__blobs">
+                            <span className="blob-btn__blob"></span>
+                            <span className="blob-btn__blob"></span>
+                            <span className="blob-btn__blob"></span>
+                            <span className="blob-btn__blob"></span>
                         </span>
                     </span>
                 </button>
